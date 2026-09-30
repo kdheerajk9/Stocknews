@@ -85,21 +85,103 @@ def _yoy(rows, field):
     return None
 
 
+def _latest(df, row):
+    """Most recent non-empty value of a row in a yfinance statement."""
+    if df is None or df.empty or row not in df.index:
+        return None
+    for col in sorted(df.columns, reverse=True):
+        v = _num(df.at[row, col])
+        if v is not None:
+            return v
+    return None
+
+
+def _ttm_eps(t):
+    """Trailing-12-month EPS: last 4 consecutive quarters, else the latest annual figure."""
+    q = t.quarterly_income_stmt
+    if q is not None and not q.empty and "Diluted EPS" in q.index:
+        cols = sorted(q.columns, reverse=True)[:4]
+        vals = [_num(q.at["Diluted EPS", c]) for c in cols]
+        if len(cols) == 4 and None not in vals and (cols[0] - cols[3]).days <= 290:
+            return sum(vals)
+    return _latest(t.income_stmt, "Diluted EPS")
+
+
+def _computed_fundamentals(t, price):
+    """Ratios calculated from published statements and price history.
+
+    Used when Yahoo's company-info feed is unavailable (it is often blocked for cloud servers,
+    while the statements and chart feeds keep working).
+    """
+    bs = t.balance_sheet
+    equity = _latest(bs, "Stockholders Equity")
+    shares = _latest(bs, "Ordinary Shares Number") or _latest(bs, "Share Issued")
+    debt = _latest(bs, "Total Debt")
+    net_income = _latest(t.income_stmt, "Net Income")
+    eps = _ttm_eps(t)
+    book = equity / shares if equity and shares else None
+
+    div_yield = None
+    try:
+        divs = t.dividends.copy()
+        if price and divs is not None and len(divs):
+            # Per-share dividends paid before a bonus issue/split must be scaled to today's share count.
+            for date, ratio in t.splits.items():
+                if ratio and ratio > 0:
+                    divs[divs.index < date] /= ratio
+            cutoff = divs.index[-1] - timedelta(days=365)
+            div_yield = float(divs[divs.index > cutoff].sum()) / price * 100
+    except Exception:
+        pass
+
+    return {
+        "market_cap": price * shares if price and shares else None,
+        "pe": price / eps if price and eps and eps > 0 else None,
+        "pb": price / book if price and book and book > 0 else None,
+        "roe": net_income / equity * 100 if net_income is not None and equity else None,
+        "eps": eps,
+        "dividend_yield": div_yield,
+        "book_value": book,
+        "debt_to_equity": debt / equity if debt is not None and equity else None,
+    }
+
+
+def _safe_info(t):
+    try:
+        return t.info or {}
+    except Exception:
+        return {}
+
+
 def _profile(ticker):
     t = yf.Ticker(ticker)
-    info = t.info or {}
-    if not info.get("longName") and not info.get("shortName"):
+    info = _safe_info(t)
+    hist = t.history(period="1y", auto_adjust=False)
+    meta = t.get_history_metadata() if not hist.empty else {}
+    name = info.get("longName") or info.get("shortName") or meta.get("longName") or meta.get("shortName")
+    if not name or hist.empty:
         raise LookupError(f"No data found for {ticker}. Check the symbol (e.g. RELIANCE.NS, AAPL).")
 
-    price = _num(info.get("currentPrice") or info.get("regularMarketPrice"))
+    closes = hist["Close"].dropna()
+    price = _num(info.get("currentPrice") or info.get("regularMarketPrice") or meta.get("regularMarketPrice"))         or _num(closes.iloc[-1])
     prev = _num(info.get("previousClose") or info.get("regularMarketPreviousClose"))
-    eps = _num(info.get("trailingEps"))
-    book = _num(info.get("bookValue"))
+    if prev is None and len(closes) >= 2:
+        prev = _num(closes.iloc[-2])
+
+    computed = _computed_fundamentals(t, price)
     roe = _num(info.get("returnOnEquity"))
-    if roe is None and eps and book:
-        roe = eps / book  # ROE ~ EPS / book value per share
-    div = _num(info.get("dividendYield"))
     dte = _num(info.get("debtToEquity"))  # Yahoo reports this as a percentage
+    from_info = {
+        "market_cap": _num(info.get("marketCap")),
+        "pe": _num(info.get("trailingPE")),
+        "pb": _num(info.get("priceToBook")),
+        "roe": roe * 100 if roe is not None else None,
+        "eps": _num(info.get("trailingEps")),
+        "dividend_yield": _num(info.get("dividendYield")),
+        "book_value": _num(info.get("bookValue")),
+        "debt_to_equity": dte / 100 if dte is not None else None,
+    }
+    fundamentals = {k: from_info[k] if from_info[k] is not None else computed[k] for k in from_info}
 
     quarterly = _results(t.quarterly_income_stmt, _quarter_label)
     yearly = _results(t.income_stmt, lambda c: f"FY{c.strftime('%y')}" if c.month <= 3 else c.strftime("%Y"))
@@ -107,37 +189,32 @@ def _profile(ticker):
     ceo = next((o.get("name") for o in info.get("companyOfficers", [])
                 if "CEO" in (o.get("title") or "").upper() or "MANAGING DIRECTOR" in (o.get("title") or "").upper()),
                None)
+    about = {
+        "summary": info.get("longBusinessSummary"),
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+        "ceo": ceo,
+        "employees": info.get("fullTimeEmployees"),
+        "website": info.get("website"),
+        "headquarters": ", ".join(x for x in (info.get("city"), info.get("country")) if x) or None,
+        "source": "Yahoo Finance" if info.get("longBusinessSummary") else None,
+    }
+    if not about["summary"]:
+        about.update({k: v for k, v in _wikipedia(name).items() if v})
+
     return {
         "ticker": ticker,
-        "name": info.get("longName") or info.get("shortName"),
-        "currency": info.get("currency") or "USD",
-        "exchange": info.get("fullExchangeName") or info.get("exchange"),
+        "name": name,
+        "currency": info.get("currency") or meta.get("currency") or "USD",
+        "exchange": info.get("fullExchangeName") or meta.get("fullExchangeName") or meta.get("exchangeName"),
         "price": price,
         "change_pct": _pct(price, prev),
-        "day_high": _num(info.get("dayHigh")),
-        "day_low": _num(info.get("dayLow")),
-        "week52_high": _num(info.get("fiftyTwoWeekHigh")),
-        "week52_low": _num(info.get("fiftyTwoWeekLow")),
-        "fundamentals": {
-            "market_cap": _num(info.get("marketCap")),
-            "pe": _num(info.get("trailingPE")),
-            "pb": _num(info.get("priceToBook")),
-            "roe": roe * 100 if roe is not None else None,
-            "eps": eps,
-            "dividend_yield": div,
-            "book_value": book,
-            "debt_to_equity": dte / 100 if dte is not None else None,
-            "face_value": None,
-        },
-        "about": {
-            "summary": info.get("longBusinessSummary"),
-            "sector": info.get("sector"),
-            "industry": info.get("industry"),
-            "ceo": ceo,
-            "employees": info.get("fullTimeEmployees"),
-            "website": info.get("website"),
-            "headquarters": ", ".join(x for x in (info.get("city"), info.get("country")) if x) or None,
-        },
+        "day_high": _num(info.get("dayHigh") or meta.get("regularMarketDayHigh")),
+        "day_low": _num(info.get("dayLow") or meta.get("regularMarketDayLow")),
+        "week52_high": _num(info.get("fiftyTwoWeekHigh") or meta.get("fiftyTwoWeekHigh")) or _num(hist["High"].max()),
+        "week52_low": _num(info.get("fiftyTwoWeekLow") or meta.get("fiftyTwoWeekLow")) or _num(hist["Low"].min()),
+        "fundamentals": fundamentals,
+        "about": about,
         "quarterly": quarterly,
         "yearly": yearly,
         "_holders": {
@@ -145,6 +222,49 @@ def _profile(ticker):
             "institutions": _num(info.get("heldPercentInstitutions")),
         },
     }
+
+
+# ---------------------------------------------------------------- Wikipedia (company description fallback)
+
+COMPANY_WORDS = re.compile(
+    r"\b(company|companies|conglomerate|corporation|multinational|bank|banking|firm|manufacturer|maker|"
+    r"producer|retailer|insurer|depository|exchange|business|enterprise|provider|holding|group)\b", re.I)
+WIKI_HEADERS = {"User-Agent": "StockNewsDaily/1.0 (https://github.com/kdheerajk9/Stocknews)"}
+
+
+def _wikipedia(name):
+    """Short company description from Wikipedia, used when Yahoo's profile is unavailable."""
+    # "HDFC Bank Limited" -> "HDFC Bank"; "Central Depository Services (India) Limited" -> "Central Depository Services"
+    core = re.sub(r"\((India|I)\)|\b(Limited|Ltd|Inc|Incorporated|Corporation|Corp|plc|Co)\b\.?|,", " ", name, flags=re.I)
+    core = re.sub(r"\s+", " ", core).strip()
+    first_two = " ".join(core.split()[:2]).lower()
+    try:
+        search = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={"action": "query", "list": "search", "srsearch": f"{core} company", "srlimit": 8, "format": "json"},
+            headers=WIKI_HEADERS, timeout=10,
+        ).json()
+        hits = [h["title"] for h in search.get("query", {}).get("search", [])]
+        # The title must contain the company's name ...
+        candidates = [h for h in hits if core.lower() in h.lower() or h.lower().startswith(first_two)]
+        for title in candidates[:3]:
+            page = requests.get(
+                "https://en.wikipedia.org/api/rest_v1/page/summary/" + requests.utils.quote(title.replace(" ", "_")),
+                headers=WIKI_HEADERS, timeout=10,
+            ).json()
+            desc = page.get("description") or ""
+            # ... and the page must describe a company (not e.g. the fruit "Apple").
+            if not COMPANY_WORDS.search(desc + " " + (page.get("extract") or "")[:200]):
+                continue
+            return {
+                "summary": page.get("extract"),
+                "industry": desc[:1].upper() + desc[1:] if desc else None,
+                "source": "Wikipedia",
+                "wiki_url": page.get("content_urls", {}).get("desktop", {}).get("page"),
+            }
+    except (requests.RequestException, ValueError, KeyError):
+        pass
+    return {}
 
 
 # ---------------------------------------------------------------- NSE shareholding

@@ -61,55 +61,6 @@ def api_company(ticker):
     return jsonify(_company_cache[key])
 
 
-@app.get("/api/diag")
-def api_diag():
-    """TEMPORARY: checks which data sources are reachable from this server."""
-    import time
-    import traceback
-
-    import requests
-    import yfinance as yf
-
-    from fundamentals import NSE_HEADERS
-
-    out = {}
-    ua = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36"}
-    now = int(time.time())
-    urls = {
-        "yahoo_chart": "https://query1.finance.yahoo.com/v8/finance/chart/RELIANCE.NS?range=1d&interval=1d",
-        "yahoo_quotesummary": "https://query2.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=price",
-        "yahoo_timeseries": "https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/AAPL"
-                            f"?type=quarterlyTotalRevenue&period1={now - 86400 * 800}&period2={now}",
-    }
-    for name, url in urls.items():
-        try:
-            r = requests.get(url, headers=ua, timeout=15)
-            out[name] = f"{r.status_code} {r.text[:120]}"
-        except Exception as e:
-            out[name] = f"ERR {e}"
-    for name, url in {
-        "nse_shp": "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities&symbol=CDSL",
-        "nse_results": "https://www.nseindia.com/api/corporates-financial-results?index=equities&symbol=CDSL&period=Quarterly",
-    }.items():
-        try:
-            r = requests.get(url, headers=NSE_HEADERS, timeout=15)
-            out[name] = f"{r.status_code} {r.text[:80]}"
-        except Exception as e:
-            out[name] = f"ERR {e}"
-    try:
-        t = yf.Ticker("RELIANCE.NS")
-        out["yf_info_keys"] = len(t.info or {})
-    except Exception:
-        out["yf_info"] = traceback.format_exc()[-500:]
-    try:
-        q = yf.Ticker("RELIANCE.NS").quarterly_income_stmt
-        out["yf_quarterly_shape"] = list(q.shape)
-    except Exception:
-        out["yf_quarterly"] = traceback.format_exc()[-500:]
-    out["yfinance_version"] = yf.__version__
-    return jsonify(out)
-
-
 @app.post("/api/summary")
 def api_summary():
     body = request.get_json(silent=True) or {}

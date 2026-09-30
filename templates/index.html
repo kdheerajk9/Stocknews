@@ -616,7 +616,10 @@ function aboutCard(d) {
       fact("Employees", a.employees ? a.employees.toLocaleString("en-IN") : null),
       fact("Headquarters", a.headquarters),
       site ? el("div", {}, el("span", {}, "Website"), el("b", {}, site)) : null,
-      fact("Symbol", d.ticker)));
+      fact("Symbol", d.ticker)),
+    a.source === "Wikipedia" && a.wiki_url
+      ? el("p", { class: "note" }, "Description from ", el("a", { href: a.wiki_url, target: "_blank", rel: "noopener noreferrer" }, "Wikipedia"), ".")
+      : null);
 }
 
 renderChips();
