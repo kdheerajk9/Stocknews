@@ -4,4 +4,5 @@ feedparser>=6.0
 requests>=2.31
 python-dotenv>=1.0
 gunicorn>=22.0
+yfinance>=1.0
 charset-normalizer>=3.0

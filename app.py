@@ -12,6 +12,7 @@ from flask import Flask, jsonify, render_template, request
 
 load_dotenv()
 
+from fundamentals import get_company  # noqa: E402
 from news import fetch_news  # noqa: E402
 from summarizer import summarize  # noqa: E402
 
@@ -22,6 +23,8 @@ ACCESS_CODE = os.environ.get("ACCESS_CODE", "")
 app = Flask(__name__)
 # One summary per (day, ticker set) so repeat visits don't cost extra API calls.
 _cache = {}
+# Company data changes at most daily; cache it to keep pages fast and avoid hammering the sources.
+_company_cache = {}
 
 
 def _parse_tickers(raw):
@@ -35,6 +38,27 @@ def _parse_tickers(raw):
 @app.get("/")
 def index():
     return render_template("index.html", needs_code=bool(ACCESS_CODE), max_tickers=MAX_TICKERS)
+
+
+@app.get("/api/company/<ticker>")
+def api_company(ticker):
+    tickers = _parse_tickers(ticker)
+    if not tickers:
+        return jsonify(error="Invalid ticker."), 400
+    ticker = tickers[0]
+    key = (datetime.now(timezone.utc).strftime("%Y-%m-%d"), ticker)
+    if key not in _company_cache:
+        try:
+            data = get_company(ticker)
+        except LookupError as e:
+            return jsonify(error=str(e)), 404
+        except Exception:
+            app.logger.exception("Company data failed for %s", ticker)
+            return jsonify(error=f"Could not load data for {ticker} right now. Try again shortly."), 502
+        if len(_company_cache) > 300:
+            _company_cache.clear()
+        _company_cache[key] = data
+    return jsonify(_company_cache[key])
 
 
 @app.post("/api/summary")

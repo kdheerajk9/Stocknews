@@ -3,138 +3,624 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Daily Stock News</title>
+<title>StockNews Daily</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d23; --muted: #626a78;
-    --border: #e2e5ea; --accent: #2457d6; --accent-text: #ffffff; --error: #b42318;
+    --bg: #f4f6fa; --surface: #ffffff; --surface-2: #f0f2f7; --text: #131722; --muted: #5d6576;
+    --border: #e3e7ef; --accent: #00b386; --accent-soft: #e3f7f1; --accent-text: #ffffff;
+    --up: #00a078; --up-soft: #e6f6f0; --down: #e5484d; --down-soft: #fdecec;
+    --rev: #8a94a8; --profit: #00b386; --shadow: 0 1px 2px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.05);
+    --c1: #f5a524; --c2: #9bb85c; --c3: #7c6cf2; --c4: #3fa7e0;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #111318; --card: #1a1d24; --text: #e8eaef; --muted: #9aa2b1;
-      --border: #2b2f39; --accent: #6b93ff; --accent-text: #0d1020; --error: #ff8a80;
+    :root:not([data-theme="light"]) {
+      --bg: #0e0f12; --surface: #17181c; --surface-2: #202127; --text: #eceef2; --muted: #9a9fab;
+      --border: #2a2c33; --accent: #1fd1a0; --accent-soft: #10302a; --accent-text: #06120e;
+      --up: #2ed3a0; --up-soft: #0f2c24; --down: #ff6b6b; --down-soft: #341818;
+      --rev: #6f7890; --profit: #1fd1a0; --shadow: none;
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #0e0f12; --surface: #17181c; --surface-2: #202127; --text: #eceef2; --muted: #9a9fab;
+    --border: #2a2c33; --accent: #1fd1a0; --accent-soft: #10302a; --accent-text: #06120e;
+    --up: #2ed3a0; --up-soft: #0f2c24; --down: #ff6b6b; --down-soft: #341818;
+    --rev: #6f7890; --profit: #1fd1a0; --shadow: none;
+  }
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body { margin: 0; background: var(--bg); color: var(--text);
-         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
-  h1 { font-size: 1.6rem; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 24px; }
-  form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-  input { flex: 1 1 220px; padding: 10px 12px; font: inherit; color: var(--text);
-          background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
-  button { padding: 10px 18px; font: inherit; font-weight: 600; border: 0; border-radius: 8px;
-           background: var(--accent); color: var(--accent-text); cursor: pointer; }
-  button:disabled { opacity: .6; cursor: wait; }
-  .hint { color: var(--muted); font-size: .85rem; margin: 0 0 24px; }
-  .error { color: var(--error); margin: 16px 0; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-          padding: 18px 20px; margin-bottom: 16px; }
-  .overview { font-size: 1.05rem; }
-  .meta { color: var(--muted); font-size: .85rem; margin-bottom: 8px; }
-  .ticker { font-weight: 700; font-size: 1.1rem; }
-  .headline { font-weight: 600; margin: 4px 0 8px; }
-  ul { margin: 8px 0 0; padding-left: 20px; }
-  details { margin-top: 12px; font-size: .9rem; }
-  summary { cursor: pointer; color: var(--muted); }
-  details a { color: var(--accent); overflow-wrap: anywhere; }
-  .disclaimer { color: var(--muted); font-size: .8rem; margin-top: 32px; }
+         font: 15px/1.55 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+
+  /* Top bar */
+  header.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent);
+               backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  .top .wrap { display: flex; align-items: center; gap: 12px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.1rem; letter-spacing: -.01em; }
+  .logo { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; }
+  .logo svg { width: 18px; height: 18px; }
+  .spacer { flex: 1; }
+  .icon-btn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border);
+              background: var(--surface); cursor: pointer; display: grid; place-items: center; }
+
+  /* Hero / search */
+  .hero { padding: 28px 0 8px; }
+  .hero h1 { font-size: clamp(1.5rem, 4vw, 2.1rem); line-height: 1.2; margin: 0 0 6px; letter-spacing: -.02em; }
+  .hero p { margin: 0 0 18px; color: var(--muted); }
+  .search { display: flex; gap: 8px; background: var(--surface); border: 1px solid var(--border);
+            border-radius: 14px; padding: 6px; box-shadow: var(--shadow); }
+  .search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 10px 12px; outline: none; }
+  .btn { border: 0; border-radius: 10px; padding: 10px 18px; font-weight: 600; cursor: pointer;
+         background: var(--accent); color: var(--accent-text); white-space: nowrap; }
+  .btn.ghost { background: var(--surface-2); color: var(--text); }
+  .btn:disabled { opacity: .6; cursor: wait; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+  .chips-label { color: var(--muted); font-size: .85rem; margin-right: 2px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+          border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: .88rem; font-weight: 500; }
+  .chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+  .chip .x { border: 0; background: none; padding: 0 0 0 2px; cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; }
+
+  /* Section nav */
+  .secnav { position: sticky; top: 60px; z-index: 10; background: var(--bg); padding: 10px 0; margin-top: 18px;
+            display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .secnav a { flex: none; padding: 7px 14px; border-radius: 999px; text-decoration: none; color: var(--muted);
+              font-size: .88rem; font-weight: 600; border: 1px solid var(--border); background: var(--surface); }
+  .secnav a:hover { color: var(--text); }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+          padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); scroll-margin-top: 120px; }
+  .card h2 { font-size: 1.15rem; margin: 0 0 14px; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; letter-spacing: -.01em; }
+  .card h2 .sub { font-size: .8rem; font-weight: 500; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+
+  /* Stock header */
+  .stock-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; }
+  .stock-name { font-size: 1.35rem; font-weight: 800; margin: 0; letter-spacing: -.01em; }
+  .stock-meta { color: var(--muted); font-size: .85rem; margin-top: 2px; }
+  .price { font-size: 2rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+  .chg { font-weight: 700; font-size: .95rem; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .range { margin-top: 18px; display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 600px) { .range { grid-template-columns: 1fr; } }
+  .range-label { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); }
+  .range-bar { position: relative; height: 6px; border-radius: 6px; margin: 6px 0;
+               background: linear-gradient(90deg, var(--down), var(--c1), var(--up)); }
+  .range-dot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; transform: translate(-50%, -50%);
+               background: var(--surface); border: 3px solid var(--text); }
+  .range-vals { display: flex; justify-content: space-between; font-size: .85rem; font-weight: 600; }
+
+  /* Insights */
+  .insights { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x mandatory; }
+  .insight { flex: 0 0 260px; scroll-snap-align: start; border-radius: 14px; padding: 16px; border: 1px solid var(--border); }
+  .insight.positive { background: var(--up-soft); }
+  .insight.negative { background: var(--down-soft); }
+  .insight-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .insight-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #fff; font-weight: 800; }
+  .positive .insight-icon { background: var(--up); } .negative .insight-icon { background: var(--down); }
+  .badge { font-size: .7rem; font-weight: 700; letter-spacing: .04em; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; }
+  .positive .badge { color: var(--up); background: var(--surface); } .negative .badge { color: var(--down); background: var(--surface); }
+  .insight h3 { margin: 0 0 4px; font-size: .98rem; }
+  .insight p { margin: 0; font-size: .86rem; color: var(--muted); }
+
+  /* AI summary */
+  .ai-cta { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .ai-cta input { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); width: 160px; }
+  .ai-hint { color: var(--muted); font-size: .85rem; margin: 0 0 12px; }
+  .ai-headline { font-weight: 700; font-size: 1.02rem; margin: 0 0 8px; }
+  .ai-body ul { margin: 10px 0 0; padding-left: 20px; }
+  .ai-body li { margin-bottom: 4px; }
+  details { margin-top: 12px; font-size: .88rem; }
+  summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+  details li a { overflow-wrap: anywhere; }
+
+  /* Fundamentals */
+  .fund { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; }
+  @media (max-width: 600px) { .fund { grid-template-columns: 1fr; } }
+  .fund-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px dashed var(--border); gap: 8px; }
+  .fund-row span:first-child { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .fund-row b { font-weight: 700; }
+  .tip { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
+         border: 1px solid var(--muted); font-size: .65rem; font-weight: 700; cursor: help; color: var(--muted); }
+  .tip:hover::after, .tip:focus::after { content: attr(data-tip); position: absolute; left: 50%; bottom: 140%; transform: translateX(-50%);
+         width: 220px; background: var(--text); color: var(--bg); padding: 8px 10px; border-radius: 8px; font-size: .78rem;
+         font-weight: 500; line-height: 1.4; z-index: 5; text-align: left; }
+
+  /* Financial chart */
+  .toggle { display: inline-flex; gap: 6px; margin-bottom: 14px; }
+  .toggle button { border: 1px solid var(--border); background: var(--surface); padding: 7px 16px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .88rem; }
+  .toggle button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .legend { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 8px; }
+  .legend label { display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+  .legend .lg-name { display: flex; align-items: center; gap: 6px; font-size: .75rem; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+  .legend .lg-val { font-weight: 700; font-size: 1.05rem; }
+  .legend input { accent-color: var(--accent); }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+  .chart .sel text.period { fill: var(--text); font-weight: 700; }
+  .chart .bar { cursor: pointer; }
+
+  /* About */
+  .about-text { color: var(--muted); margin: 0; }
+  .about-text.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .link-btn { background: none; border: 0; color: var(--accent); font-weight: 600; cursor: pointer; padding: 4px 0; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-top: 16px; }
+  .facts div span { display: block; color: var(--muted); font-size: .8rem; }
+  .facts div b { font-weight: 700; overflow-wrap: anywhere; }
+
+  /* Shareholding */
+  .qpills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .qpills button { border: 1px solid var(--border); background: var(--surface); padding: 6px 14px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: .85rem; }
+  .qpills button.on { border-color: var(--text); background: var(--surface-2); }
+  .hold { display: grid; grid-template-columns: 110px 1fr 64px; gap: 12px; align-items: center; padding: 9px 0; }
+  .hold .track { height: 8px; border-radius: 8px; background: var(--surface-2); overflow: hidden; }
+  .hold .fill { height: 100%; border-radius: 8px; transition: width .4s ease; }
+  .hold b { text-align: right; }
+  .hold small { display: block; color: var(--muted); font-size: .72rem; line-height: 1.2; }
+  .trend-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 18px; }
+  .trend { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--surface-2); }
+  .trend .t-name { font-size: .8rem; color: var(--muted); font-weight: 600; }
+  .trend .t-val { font-size: 1.3rem; font-weight: 800; }
+  .trend svg { width: 100%; height: 36px; display: block; margin-top: 6px; }
+
+  /* States */
+  .empty { text-align: center; padding: 56px 16px; color: var(--muted); }
+  .empty .big { font-size: 2.6rem; }
+  .error { color: var(--down); background: var(--down-soft); padding: 12px 14px; border-radius: 10px; margin: 12px 0; }
+  .skeleton { border-radius: 16px; background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+              background-size: 200% 100%; animation: shimmer 1.2s infinite; height: 140px; margin-bottom: 16px; border: 1px solid var(--border); }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .muted { color: var(--muted); }
+  .note { font-size: .78rem; color: var(--muted); margin-top: 12px; }
+  footer { color: var(--muted); font-size: .8rem; padding: 24px 0 48px; border-top: 1px solid var(--border); margin-top: 24px; }
 </style>
 </head>
 <body>
-<main>
-  <h1>Daily Stock News</h1>
-  <p class="sub">A short, neutral summary of today's news for the stocks you follow.</p>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg></div>
+      StockNews Daily
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="theme" title="Switch light / dark" aria-label="Switch light or dark theme">◐</button>
+  </div>
+</header>
 
-  <form id="form">
-    <input id="tickers" placeholder="Tickers, e.g. AAPL, TSLA, RELIANCE.NS" autocomplete="off" required>
-    {% if needs_code %}<input id="code" type="password" placeholder="Access code" style="flex:0 1 160px">{% endif %}
-    <button id="go" type="submit">Summarize</button>
-  </form>
-  <p class="hint">Up to {{ max_tickers }} tickers, separated by commas. Use Yahoo symbols (e.g. <code>.NS</code> for NSE, <code>.BO</code> for BSE).</p>
+<main class="wrap">
+  <section class="hero">
+    <h1>Your stocks, explained in 2 minutes.</h1>
+    <p>Today's news summarised by AI, plus fundamentals, results and who owns the company — in plain language.</p>
+    <form class="search" id="search">
+      <input id="q" placeholder="Add a stock, e.g. RELIANCE.NS, TCS.NS, AAPL" autocomplete="off" aria-label="Stock symbol">
+      <button class="btn" type="submit">Add</button>
+    </form>
+    <div class="chips" id="watchlist"></div>
+    <div class="chips" id="popular"><span class="chips-label">Popular:</span></div>
+  </section>
 
-  <div id="error" class="error" hidden></div>
-  <div id="out"></div>
+  <div id="view"></div>
 
-  <p class="disclaimer">News summaries only. This is not investment advice and makes no buy or sell recommendations.
-    Summaries are generated by AI from public headlines and may contain mistakes; check the linked sources.</p>
+  <footer>
+    News summaries and data are for information only — this is <b>not investment advice</b> and makes no buy or sell recommendations.
+    Data from Yahoo Finance and NSE filings; summaries generated by AI and may contain mistakes. Always check the linked sources.
+  </footer>
 </main>
 
 <script>
+const NEEDS_CODE = {{ 'true' if needs_code else 'false' }};
+const POPULAR = [["RELIANCE.NS","Reliance"],["TCS.NS","TCS"],["HDFCBANK.NS","HDFC Bank"],["INFY.NS","Infosys"],["CDSL.NS","CDSL"],["AAPL","Apple"]];
+const TIPS = {
+  market_cap: "Total value of all the company's shares. Bigger = larger company.",
+  pe: "Price ÷ yearly earnings per share. How many years of current profit you pay for. Higher often means the market expects growth.",
+  pb: "Price ÷ book value (assets minus debts) per share.",
+  roe: "Return on Equity: profit made for every ₹100 / $100 of shareholders' money.",
+  eps: "Earnings Per Share: last 12 months' profit divided by number of shares.",
+  dividend_yield: "Yearly dividend as a % of the share price.",
+  book_value: "Company's net assets per share.",
+  debt_to_equity: "Borrowed money compared with shareholders' money. Lower means less debt.",
+};
+
 const $ = (id) => document.getElementById(id);
 const store = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-$("tickers").value = store.get("tickers") || "AAPL, MSFT, NVDA";
-
-function el(tag, cls, text) {
+function el(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text != null) n.textContent = text;
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined && v !== false) n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) n.append(k.nodeType ? k : String(k));
   return n;
 }
+const svgEl = (tag, attrs = {}) => {
+  const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+};
 
-function render(data) {
-  const out = $("out");
-  out.replaceChildren();
+/* ---------- formatting ---------- */
+const SYM = { INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" };
+const isINR = (c) => c === "INR";
+function money(v, cur, digits = 2) {
+  if (v == null) return "—";
+  const s = SYM[cur] || "";
+  return s + v.toLocaleString(isINR(cur) ? "en-IN" : "en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }) + (s ? "" : " " + cur);
+}
+function big(v, cur) {
+  if (v == null) return "—";
+  const s = SYM[cur] || "";
+  if (isINR(cur)) return `${s}${Math.round(v / 1e7).toLocaleString("en-IN")}Cr`;
+  const a = Math.abs(v);
+  const [d, u] = a >= 1e12 ? [1e12, "T"] : a >= 1e9 ? [1e9, "B"] : a >= 1e6 ? [1e6, "M"] : [1, ""];
+  return `${s}${(v / d).toFixed(u ? 2 : 0)}${u}`;
+}
+// Short axis labels: 309468 Cr -> "3.09L Cr", 77367 Cr -> "77.4K Cr", $1.2e11 -> "120B".
+function axis(v, cur) {
+  if (isINR(cur)) {
+    const cr = v / 1e7, a = Math.abs(cr);
+    return a >= 1e5 ? `${(cr / 1e5).toFixed(2)}L Cr` : a >= 1e3 ? `${(cr / 1e3).toFixed(1)}K Cr` : `${Math.round(cr)} Cr`;
+  }
+  return big(v, cur).replace(/^[^\d-]+/, "");
+}
+const num = (v, d = 2) => v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: d });
+const pct = (v, d = 2) => v == null ? "—" : `${num(v, d)}%`;
+const signed = (v) => v == null ? "" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 
-  const ov = el("div", "card");
-  ov.append(el("div", "meta", `${data.date} · generated ${data.generated_at}`), el("div", "overview", data.overview));
-  out.append(ov);
+/* ---------- theme ---------- */
+(function initTheme() {
+  const t = store.get("theme", null);
+  if (t) document.documentElement.dataset.theme = t;
+  $("theme").onclick = () => {
+    const cur = document.documentElement.dataset.theme ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    store.set("theme", next);
+  };
+})();
 
-  for (const s of data.stocks) {
-    const card = el("div", "card");
-    card.append(el("div", "ticker", s.ticker), el("div", "headline", s.headline), el("div", null, s.summary));
-    if (s.key_points.length) {
-      const ul = el("ul");
-      s.key_points.forEach((p) => ul.append(el("li", null, p)));
-      card.append(ul);
-    }
-    const src = data.sources[s.ticker] || [];
-    if (src.length) {
-      const d = el("details");
-      d.append(el("summary", null, `Sources (${src.length})`));
-      const ul = el("ul");
-      src.forEach((a) => {
-        const li = el("li");
-        const link = el("a", null, a.title);
-        link.href = a.link; link.target = "_blank"; link.rel = "noopener noreferrer";
-        li.append(link, document.createTextNode(` — ${a.source}`));
-        ul.append(li);
-      });
-      d.append(ul);
-      card.append(d);
-    }
-    out.append(card);
+/* ---------- watchlist ---------- */
+let watch = store.get("watchlist", null) || ["RELIANCE.NS", "HDFCBANK.NS", "CDSL.NS"];
+let current = store.get("current", watch[0] || null);
+const normalize = (s) => s.trim().toUpperCase().replace(/\s+/g, "");
+
+function renderChips() {
+  const w = $("watchlist");
+  w.replaceChildren(el("span", { class: "chips-label" }, "My stocks:"));
+  if (!watch.length) w.append(el("span", { class: "muted" }, "none yet — add one above"));
+  for (const t of watch) {
+    w.append(el("span", { class: "chip" + (t === current ? " active" : ""), role: "button", tabindex: 0,
+      onclick: () => select(t), onkeydown: (e) => e.key === "Enter" && select(t) },
+      t, el("button", { class: "x", "aria-label": `Remove ${t}`, onclick: (e) => { e.stopPropagation(); remove(t); } }, "×")));
+  }
+  const p = $("popular");
+  p.replaceChildren(el("span", { class: "chips-label" }, "Popular:"));
+  for (const [t, name] of POPULAR) if (!watch.includes(t)) p.append(el("button", { class: "chip", onclick: () => add(t) }, "+ " + name));
+}
+function add(t) {
+  t = normalize(t);
+  if (!t) return;
+  if (!watch.includes(t)) watch = [...watch, t].slice(-10);
+  store.set("watchlist", watch);
+  select(t);
+}
+function remove(t) {
+  watch = watch.filter((x) => x !== t);
+  store.set("watchlist", watch);
+  if (current === t) return select(watch[0] || null);
+  renderChips();
+}
+$("search").addEventListener("submit", (e) => { e.preventDefault(); add($("q").value); $("q").value = ""; });
+
+/* ---------- loading a stock ---------- */
+const companyCache = {};
+async function select(t) {
+  current = t;
+  store.set("current", t);
+  renderChips();
+  const view = $("view");
+  if (!t) {
+    view.replaceChildren(el("div", { class: "card empty" }, el("div", { class: "big" }, "📈"),
+      el("p", {}, "Add a stock above to see its news summary, fundamentals and shareholding.")));
+    return;
+  }
+  view.replaceChildren(el("div", { class: "skeleton" }), el("div", { class: "skeleton" }), el("div", { class: "skeleton" }));
+  try {
+    const data = companyCache[t] || await fetchJSON(`/api/company/${encodeURIComponent(t)}`);
+    companyCache[t] = data;
+    if (current === t) renderStock(data);
+  } catch (err) {
+    if (current !== t) return;
+    view.replaceChildren(el("div", { class: "card" }, el("div", { class: "error" }, err.message),
+      el("p", { class: "muted" }, "Tip: Indian stocks need a suffix — .NS for NSE (e.g. TCS.NS) or .BO for BSE.")));
   }
 }
+async function fetchJSON(url, opts) {
+  const res = await fetch(url, opts);
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status}).`);
+  return data;
+}
 
-$("form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const tickers = $("tickers").value;
-  store.set("tickers", tickers);
-  $("error").hidden = true;
-  $("go").disabled = true;
-  $("go").textContent = "Reading the news…";
-  try {
-    const res = await fetch("/api/summary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tickers, access_code: $("code")?.value || "" }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Something went wrong.");
-    render(data);
-  } catch (err) {
-    $("error").textContent = err.message;
-    $("error").hidden = false;
-  } finally {
-    $("go").disabled = false;
-    $("go").textContent = "Summarize";
+/* ---------- rendering ---------- */
+function renderStock(d) {
+  const sections = [
+    ["overview", "Overview"], ["news", "AI News"], ["insights", "Insights"], ["fundamentals", "Fundamentals"],
+    ["financials", "Financials"], ["shareholding", "Shareholding"], ["about", "About"],
+  ];
+  $("view").replaceChildren(
+    el("nav", { class: "secnav" }, sections.map(([id, name]) => el("a", { href: "#" + id }, name))),
+    headerCard(d), newsCard(d), insightsCard(d), fundamentalsCard(d), financialsCard(d), shareholdingCard(d), aboutCard(d),
+  );
+}
+
+function rangeBlock(label, low, high, value, cur) {
+  if (low == null || high == null || value == null || high <= low) return null;
+  const p = Math.min(100, Math.max(0, ((value - low) / (high - low)) * 100));
+  return el("div", {},
+    el("div", { class: "range-label" }, el("span", {}, label + " low"), el("span", {}, label + " high")),
+    el("div", { class: "range-bar" }, el("div", { class: "range-dot", style: `left:${p}%` })),
+    el("div", { class: "range-vals" }, el("span", {}, money(low, cur)), el("span", {}, money(high, cur))));
+}
+
+function headerCard(d) {
+  const cls = d.change_pct == null ? "" : d.change_pct >= 0 ? "up" : "down";
+  const range = el("div", { class: "range" },
+    rangeBlock("Today's", d.day_low, d.day_high, d.price, d.currency),
+    rangeBlock("52 week", d.week52_low, d.week52_high, d.price, d.currency));
+  return el("section", { class: "card", id: "overview" },
+    el("div", { class: "stock-head" },
+      el("div", {}, el("h1", { class: "stock-name" }, d.name),
+        el("div", { class: "stock-meta" }, [d.ticker, d.exchange, d.about.sector].filter(Boolean).join(" · "))),
+      el("div", { style: "text-align:right" }, el("div", { class: "price" }, money(d.price, d.currency)),
+        el("div", { class: "chg " + cls }, d.change_pct == null ? "" : `${d.change_pct >= 0 ? "▲" : "▼"} ${signed(d.change_pct)} today`))),
+    range.children.length ? range : null);
+}
+
+function insightsCard(d) {
+  const card = el("section", { class: "card", id: "insights" },
+    el("h2", {}, "Insights", el("span", { class: "sub" }, "automatic highlights from the latest data")));
+  if (!d.insights.length) {
+    card.append(el("p", { class: "muted" }, "No notable changes in the latest data."));
+    return card;
   }
-});
+  card.append(el("div", { class: "insights" }, d.insights.map((i) =>
+    el("div", { class: "insight " + i.impact },
+      el("div", { class: "insight-top" },
+        el("div", { class: "insight-icon" }, i.impact === "positive" ? "↗" : "↘"),
+        el("span", { class: "badge" }, i.impact + " impact")),
+      el("h3", {}, i.title), el("p", {}, i.detail)))));
+  card.append(el("p", { class: "note" }, "Insights are simple rules applied to reported numbers, not recommendations."));
+  return card;
+}
+
+function newsCard(d) {
+  const body = el("div", {});
+  const btn = el("button", { class: "btn" }, "✨ Summarise today's news");
+  const code = NEEDS_CODE ? el("input", { type: "password", placeholder: "Access code", value: store.get("code", "") }) : null;
+  const cta = el("div", { class: "ai-cta" }, code, btn);
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = "Reading the news…";
+    body.replaceChildren();
+    try {
+      if (code) store.set("code", code.value);
+      const r = await fetchJSON("/api/summary", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tickers: d.ticker, access_code: code ? code.value : "" }) });
+      const s = r.stocks[0];
+      const src = r.sources[d.ticker] || [];
+      body.append(
+        el("div", { class: "ai-body" },
+          el("p", { class: "ai-headline" }, s.headline),
+          el("p", { style: "margin:0" }, s.summary),
+          s.key_points.length ? el("ul", {}, s.key_points.map((p) => el("li", {}, p))) : null,
+          src.length ? el("details", {}, el("summary", {}, `Sources (${src.length})`),
+            el("ul", {}, src.map((a) => el("li", {}, el("a", { href: a.link, target: "_blank", rel: "noopener noreferrer" }, a.title), ` — ${a.source}`)))) : null,
+          el("p", { class: "note" }, `Generated ${r.date} ${r.generated_at} by AI from public headlines.`)));
+      cta.remove();
+    } catch (err) {
+      body.append(el("div", { class: "error" }, err.message));
+      btn.disabled = false; btn.textContent = "✨ Summarise today's news";
+    }
+  };
+  return el("section", { class: "card", id: "news" },
+    el("h2", {}, "Today's News", el("span", { class: "sub" }, "summarised by Claude AI")),
+    el("p", { class: "ai-hint" }, "No time to read everything? Get a short, neutral summary of the last day's headlines."),
+    cta, body);
+}
+
+function fundamentalsCard(d) {
+  const f = d.fundamentals, c = d.currency;
+  const rows = [
+    ["Market Cap", "market_cap", big(f.market_cap, c)],
+    ["P/E Ratio (TTM)", "pe", num(f.pe)],
+    ["P/B Ratio", "pb", num(f.pb)],
+    ["ROE", "roe", pct(f.roe)],
+    ["EPS (TTM)", "eps", num(f.eps)],
+    ["Dividend Yield", "dividend_yield", pct(f.dividend_yield)],
+    ["Book Value", "book_value", num(f.book_value)],
+    ["Debt to Equity", "debt_to_equity", num(f.debt_to_equity)],
+  ];
+  return el("section", { class: "card", id: "fundamentals" },
+    el("h2", {}, "Fundamentals", el("span", { class: "sub" }, "hover ⓘ for a simple explanation")),
+    el("div", { class: "fund" }, rows.map(([label, key, val]) =>
+      el("div", { class: "fund-row" },
+        el("span", {}, label, el("i", { class: "tip", tabindex: 0, "data-tip": TIPS[key] }, "i")),
+        el("b", {}, val)))));
+}
+
+function financialsCard(d) {
+  let mode = d.quarterly.length ? "quarterly" : "yearly";
+  let show = { revenue: true, profit: true };
+  let sel = null;
+  const legend = el("div", { class: "legend" });
+  const chart = el("div", { class: "chart" });
+  const toggle = el("div", { class: "toggle" });
+  const card = el("section", { class: "card", id: "financials" },
+    el("h2", {}, "Financial Performance", el("span", { class: "sub" }, "revenue & net profit")), toggle, legend, chart);
+
+  // Label of the same period one year earlier: "Jun '26" -> "Jun '25", "FY26" -> "FY25", "2025" -> "2024".
+  const yearAgo = (p) => p.replace(/(\d+)$/, (m) => String(Number(m) - 1).padStart(m.length, "0"));
+
+  function growth(rows, i, field) {
+    const prev = rows.find((x) => x.period === yearAgo(rows[i].period));
+    if (!prev || prev[field] == null || !prev[field] || rows[i][field] == null) return null;
+    return ((rows[i][field] - prev[field]) / Math.abs(prev[field])) * 100;
+  }
+
+  function draw() {
+    const rows = d[mode];
+    toggle.replaceChildren(...["quarterly", "yearly"].map((m) =>
+      el("button", { class: m === mode ? "on" : "", onclick: () => { mode = m; sel = null; draw(); } }, m[0].toUpperCase() + m.slice(1))));
+    if (!rows.length) { legend.replaceChildren(); chart.replaceChildren(el("p", { class: "muted" }, "No results data available.")); return; }
+    if (sel == null || sel >= rows.length) sel = rows.length - 1;
+    const r = rows[sel];
+
+    legend.replaceChildren(
+      el("div", { class: "muted", style: "width:100%;font-weight:700;font-size:.8rem" }, r.period),
+      ...[["revenue", "Revenue", "var(--rev)"], ["profit", "Profit", "var(--profit)"]].map(([k, name, color]) => {
+        const g = growth(rows, sel, k);
+        const cb = el("input", { type: "checkbox" });
+        cb.checked = show[k];
+        cb.onchange = () => { show[k] = cb.checked; draw(); };
+        return el("label", {},
+          el("span", { class: "lg-name" }, cb, el("span", { style: `width:10px;height:10px;border-radius:2px;background:${color}` }), name.toUpperCase()),
+          el("span", { class: "lg-val" }, big(r[k], d.currency), " ",
+            g == null ? "" : el("span", { class: g >= 0 ? "up" : "down", style: "font-size:.85rem" }, signed(g))));
+      }));
+
+    const W = Math.min(640, Math.max(300, innerWidth - 72)), H = 240, padL = 8, padR = 64, padT = 10, padB = 28;
+    const keys = ["revenue", "profit"].filter((k) => show[k]);
+    const vals = rows.flatMap((x) => keys.map((k) => x[k] || 0));
+    const max = Math.max(1, ...vals), min = Math.min(0, ...vals);
+    const y = (v) => padT + (H - padT - padB) * (max - v) / (max - min);
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${mode} revenue and profit chart` });
+    for (let i = 0; i <= 4; i++) {
+      const v = min + ((max - min) * i) / 4;
+      svg.append(svgEl("line", { x1: padL, x2: W - padR, y1: y(v), y2: y(v), stroke: "var(--border)", "stroke-dasharray": "4 4" }));
+      const t = svgEl("text", { x: W - padR + 6, y: y(v) + 4 }); t.textContent = axis(v, d.currency); svg.append(t);
+    }
+    const slot = (W - padL - padR) / rows.length, bw = Math.min(34, slot / 3.2);
+    rows.forEach((row, i) => {
+      const g = svgEl("g", { class: i === sel ? "sel" : "" });
+      const cx = padL + slot * i + slot / 2;
+      keys.forEach((k, j) => {
+        const v = row[k] || 0;
+        const x = cx + (j - keys.length / 2) * (bw + 6) + 3;
+        const color = k === "revenue" ? "var(--rev)" : "var(--profit)";
+        const rect = svgEl("rect", { class: "bar", x, width: bw, y: Math.min(y(v), y(0)), height: Math.max(1, Math.abs(y(v) - y(0))),
+          rx: 4, fill: color, opacity: i === sel ? 1 : 0.55 });
+        g.append(rect);
+      });
+      const hit = svgEl("rect", { x: padL + slot * i, y: 0, width: slot, height: H, fill: "transparent", style: "cursor:pointer" });
+      hit.addEventListener("click", () => { sel = i; draw(); });
+      g.append(hit);
+      const t = svgEl("text", { class: "period", x: cx, y: H - 8, "text-anchor": "middle" }); t.textContent = row.period; g.append(t);
+      svg.append(g);
+    });
+    chart.replaceChildren(svg, el("p", { class: "note" }, "Tap a bar to see that period. Growth compares with the same period a year earlier."));
+  }
+  draw();
+  return card;
+}
+
+function sparkline(values, color) {
+  const pts = values.filter((v) => v != null);
+  const svg = svgEl("svg", { viewBox: "0 0 100 36", preserveAspectRatio: "none" });
+  if (pts.length < 2) return svg;
+  const max = Math.max(...pts), min = Math.min(...pts), span = max - min || 1;
+  const d = pts.map((v, i) => `${(i / (pts.length - 1)) * 100},${32 - ((v - min) / span) * 28}`).join(" ");
+  svg.append(svgEl("polyline", { points: d, fill: "none", stroke: color, "stroke-width": 2.5, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }));
+  return svg;
+}
+
+function shareholdingCard(d) {
+  const sh = d.shareholding;
+  const card = el("section", { class: "card", id: "shareholding" },
+    el("h2", {}, "Shareholding Pattern", sh.source ? el("span", { class: "sub" }, "source: " + sh.source) : null));
+  const bars = (items) => items.map(([name, value, color, hint]) =>
+    el("div", { class: "hold" },
+      el("span", {}, name, hint ? el("small", {}, hint) : null),
+      el("div", { class: "track" }, el("div", { class: "fill", style: `width:${value || 0}%;background:${color}` })),
+      el("b", {}, pct(value))));
+
+  if (sh.quarters && sh.quarters.length) {
+    const qs = sh.quarters;
+    let sel = qs.length - 1;
+    const pills = el("div", { class: "qpills" });
+    const list = el("div", {});
+    const draw = () => {
+      pills.replaceChildren(...qs.map((q, i) => el("button", { class: i === sel ? "on" : "", onclick: () => { sel = i; draw(); } }, q.quarter)));
+      const q = qs[sel];
+      list.replaceChildren(...bars([
+        ["Public", q.public, "var(--c1)", "retail, HNIs & others"],
+        ["DII", q.dii, "var(--c2)", "Indian institutions"],
+        ["Promoters", q.promoters, "var(--c3)", "founders & group"],
+        ["FII", q.fii, "var(--c4)", "foreign investors"],
+      ]));
+    };
+    draw();
+    const latest = qs[qs.length - 1], prev = qs[qs.length - 2];
+    const trend = (name, key, color, hint) => {
+      const diff = prev && latest[key] != null && prev[key] != null ? latest[key] - prev[key] : null;
+      return el("div", { class: "trend" },
+        el("div", { class: "t-name" }, name),
+        el("div", { class: "t-val" }, pct(latest[key]), " ",
+          diff == null ? "" : el("span", { class: diff >= 0 ? "up" : "down", style: "font-size:.8rem" }, `${diff >= 0 ? "▲" : "▼"} ${Math.abs(diff).toFixed(2)}`)),
+        el("div", { class: "muted", style: "font-size:.75rem" }, hint),
+        sparkline(qs.map((q) => q[key]), color));
+    };
+    card.append(pills, list,
+      el("h2", { style: "margin-top:22px;font-size:1rem" }, "Holding trends", el("span", { class: "sub" }, `${qs[0].quarter} → ${latest.quarter}`)),
+      el("div", { class: "trend-cards" },
+        trend("Mutual Funds", "mutual_funds", "var(--c2)", "part of DII"),
+        trend("Retail Investors", "retail", "var(--c1)", "individuals up to ₹2 lakh"),
+        trend("FII", "fii", "var(--c4)", "foreign investors"),
+        trend("Promoters", "promoters", "var(--c3)", "founders & group")));
+  } else if (sh.snapshot) {
+    card.append(...bars([
+      ["Institutions", sh.snapshot.institutions, "var(--c2)", "funds, banks, etc."],
+      ["Insiders", sh.snapshot.insiders, "var(--c3)", "executives & directors"],
+      ["Public & others", sh.snapshot.public, "var(--c1)", null],
+    ]), el("p", { class: "note" }, "Quarter-by-quarter breakdown (mutual funds, retail) is available for Indian stocks (.NS / .BO)."));
+  } else {
+    card.append(el("p", { class: "muted" }, sh.error || "Shareholding data isn't available for this stock."));
+  }
+  return card;
+}
+
+function aboutCard(d) {
+  const a = d.about;
+  const text = el("p", { class: "about-text clamp" }, a.summary || "No description available.");
+  const more = a.summary && a.summary.length > 260 ? el("button", { class: "link-btn", onclick: () => {
+    text.classList.toggle("clamp"); more.textContent = text.classList.contains("clamp") ? "Read more" : "Show less"; } }, "Read more") : null;
+  const fact = (label, value) => value ? el("div", {}, el("span", {}, label), el("b", {}, value)) : null;
+  let site = null;
+  if (a.website) site = el("a", { href: a.website, target: "_blank", rel: "noopener noreferrer" }, a.website.replace(/^https?:\/\/(www\.)?/, ""));
+  return el("section", { class: "card", id: "about" },
+    el("h2", {}, "About " + d.name),
+    text, more,
+    el("div", { class: "facts" },
+      fact("CEO / MD", a.ceo), fact("Sector", a.sector), fact("Industry", a.industry),
+      fact("Employees", a.employees ? a.employees.toLocaleString("en-IN") : null),
+      fact("Headquarters", a.headquarters),
+      site ? el("div", {}, el("span", {}, "Website"), el("b", {}, site)) : null,
+      fact("Symbol", d.ticker)));
+}
+
+renderChips();
+select(current);
 </script>
 </body>
 </html>

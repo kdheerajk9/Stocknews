@@ -1,13 +1,24 @@
-# Daily Stock News Summarizer
+# StockNews Daily
 
-Pick a few stocks, and the app collects today's news about them from free feeds (Yahoo Finance and Google News). Claude then writes a short, neutral daily summary.
-It summarizes the news only. It never gives buy, sell or hold advice.
+Pick your stocks and get everything you need in one simple page:
+
+- **Today's news, summarised by Claude AI:** short and neutral, with links to the sources. It never gives buy or sell advice.
+- **Insights:** automatic positive and negative highlights, such as profit growth, mutual fund holding up, or FII holding down.
+- **Fundamentals:** market cap, P/E, P/B, ROE, EPS, dividend yield, book value and debt-to-equity. Each one has a plain-language explanation.
+- **Financial performance:** quarterly and yearly revenue and profit chart, with year-on-year growth.
+- **Shareholding pattern:** promoters, FII, DII and public by quarter, plus mutual fund and retail-investor trends. For Indian stocks this comes from official NSE filings.
+- **About the company:** description, CEO, sector, employees and website.
+
+The page works on phones, has light and dark themes, and remembers your watchlist.
 
 ## How it works
 
-1. `news.py` fetches the RSS headlines for each ticker, removes duplicates and keeps articles from the last 36 hours.
-2. `summarizer.py` sends those headlines to Claude (`claude-opus-5`) with strict rules: stick to the articles, give no advice and stay neutral. Claude returns structured JSON.
-3. `app.py` is a Flask web app. It saves each day's summary for a given set of tickers, so repeat visits don't cost you another API call.
+| File | What it does |
+|---|---|
+| `news.py` | Collects the last ~36 hours of headlines from Yahoo Finance and Google News RSS |
+| `summarizer.py` | Sends headlines to Claude (`claude-opus-5`) with strict "summarise only, no advice" rules |
+| `fundamentals.py` | Gets price, ratios, results and profile from Yahoo Finance (`yfinance`), and shareholding from NSE filings |
+| `app.py` | Flask web app; caches each stock's data and each summary for the day |
 
 ## Run locally (Windows)
 
