@@ -410,3 +410,65 @@ def get_company(ticker):
     for r in data["quarterly"] + data["yearly"]:
         del r["date"]  # only needed for year-on-year matching
     return data
+
+
+# ---------------------------------------------------------------- Symbol search
+
+YAHOO_SEARCH = "https://query2.finance.yahoo.com/v1/finance/search"
+SEARCH_HEADERS = {"User-Agent": NSE_HEADERS["User-Agent"]}
+EXCHANGE_NAMES = {"NSI": "NSE", "BSE": "BSE", "NMS": "NASDAQ", "NGM": "NASDAQ", "NCM": "NASDAQ",
+                  "NYQ": "NYSE", "ASE": "NYSE American", "PCX": "NYSE Arca"}
+
+
+def search(query, limit=8):
+    """Stocks matching a company name or symbol, Indian listings (NSE, then BSE) first."""
+    resp = requests.get(
+        YAHOO_SEARCH,
+        params={"q": query, "quotesCount": 15, "newsCount": 0, "listsCount": 0},
+        headers=SEARCH_HEADERS, timeout=10,
+    )
+    resp.raise_for_status()
+    results = []
+    for q in resp.json().get("quotes", []):
+        if q.get("quoteType") not in ("EQUITY", "ETF") or not q.get("symbol"):
+            continue
+        exch = q.get("exchange", "")
+        results.append({
+            "symbol": q["symbol"],
+            "name": q.get("longname") or q.get("shortname") or q["symbol"],
+            "exchange": EXCHANGE_NAMES.get(exch, q.get("exchDisp") or exch),
+            "_rank": 0 if exch == "NSI" else 1 if exch == "BSE" else 2,
+        })
+    results.sort(key=lambda r: r["_rank"])  # stable: keeps Yahoo's relevance order within each group
+    for r in results:
+        del r["_rank"]
+    return results[:limit]
+
+
+def _squash(text):
+    return re.sub(r"[^A-Z0-9]", "", text.upper())
+
+
+def direct_candidates(query):
+    """Symbols to try first: "TCS" -> TCS.NS, TCS.BO, TCS (US); "TCS.NS" -> as typed."""
+    q = query.strip().upper()
+    if "." in q or "^" in q:
+        return [q]
+    return [f"{q}.NS", f"{q}.BO", q]
+
+
+def name_matches(query):
+    """Symbols whose company name matches text typed without spaces, e.g. COCHINSHIPYARD -> COCHINSHIP.NS."""
+    wanted = _squash(query)
+    found = []
+    try:
+        # Search engines need real words; shorter prefixes ("TATA" from "TATAMOTORS") find the company.
+        for term in dict.fromkeys((query, query[:6], query[:4])):
+            for r in search(term, limit=15):
+                if (_squash(r["name"]).startswith(wanted) or _squash(r["symbol"].split(".")[0]) == wanted)                         and r["symbol"] not in found:
+                    found.append(r["symbol"])
+            if found:
+                break
+    except (requests.RequestException, ValueError):
+        pass
+    return found

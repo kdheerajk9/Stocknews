@@ -54,6 +54,18 @@
   .hero p { margin: 0 0 18px; color: var(--muted); }
   .search { display: flex; gap: 8px; background: var(--surface); border: 1px solid var(--border);
             border-radius: 14px; padding: 6px; box-shadow: var(--shadow); }
+  .search-wrap { position: relative; }
+  .suggest { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; background: var(--surface);
+             border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.18);
+             overflow: hidden; padding: 6px; }
+  .suggest[hidden] { display: none; }
+  .sg { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; background: none;
+        padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+  .sg:hover, .sg.hl { background: var(--surface-2); }
+  .sg .sg-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sg .sg-sym { color: var(--muted); font-size: .82rem; }
+  .sg .sg-ex { font-size: .7rem; font-weight: 700; padding: 3px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--text); }
+  .sg-empty { padding: 10px 12px; color: var(--muted); font-size: .9rem; }
   .search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 10px 12px; outline: none; }
   .btn { border: 0; border-radius: 10px; padding: 10px 18px; font-weight: 600; cursor: pointer;
          background: var(--accent); color: var(--accent-text); white-space: nowrap; }
@@ -198,10 +210,14 @@
   <section class="hero">
     <h1>Your stocks, explained in 2 minutes.</h1>
     <p>Today's news summarised by AI, plus fundamentals, results and who owns the company — in plain language.</p>
-    <form class="search" id="search">
-      <input id="q" placeholder="Add a stock, e.g. RELIANCE.NS, TCS.NS, AAPL" autocomplete="off" aria-label="Stock symbol">
-      <button class="btn" type="submit">Add</button>
-    </form>
+    <div class="search-wrap">
+      <form class="search" id="search">
+        <input id="q" placeholder="Search any NSE / BSE stock — e.g. Cochin Shipyard, IRFC, Tata Motors" autocomplete="off"
+               aria-label="Search stocks by name or symbol" role="combobox" aria-controls="suggest" aria-expanded="false">
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <div class="suggest" id="suggest" role="listbox" hidden></div>
+    </div>
     <div class="chips" id="watchlist"></div>
     <div class="chips" id="popular"><span class="chips-label">Popular:</span></div>
   </section>
@@ -321,7 +337,53 @@ function remove(t) {
   if (current === t) return select(watch[0] || null);
   renderChips();
 }
-$("search").addEventListener("submit", (e) => { e.preventDefault(); add($("q").value); $("q").value = ""; });
+/* ---------- search suggestions ---------- */
+let suggestions = [], hl = -1, searchTimer = null, searchSeq = 0;
+function closeSuggest() {
+  $("suggest").hidden = true; $("q").setAttribute("aria-expanded", "false"); suggestions = []; hl = -1;
+}
+function renderSuggest(loading) {
+  const box = $("suggest");
+  box.replaceChildren();
+  if (loading) box.append(el("div", { class: "sg-empty" }, "Searching…"));
+  else if (!suggestions.length) box.append(el("div", { class: "sg-empty" }, "No matches — press Add to try the symbol as typed."));
+  suggestions.forEach((r, i) => box.append(
+    el("button", { type: "button", role: "option", class: "sg" + (i === hl ? " hl" : ""),
+      onmousedown: (e) => { e.preventDefault(); pick(r.symbol); } },
+      el("span", { class: "sg-name" }, r.name), el("span", { class: "sg-sym" }, r.symbol), el("span", { class: "sg-ex" }, r.exchange))));
+  box.hidden = false; $("q").setAttribute("aria-expanded", "true");
+}
+function pick(symbol) { $("q").value = ""; closeSuggest(); add(symbol); }
+$("q").addEventListener("input", () => {
+  const q = $("q").value.trim();
+  clearTimeout(searchTimer);
+  if (q.length < 2) return closeSuggest();
+  searchTimer = setTimeout(async () => {
+    const seq = ++searchSeq;
+    renderSuggest(true);
+    try {
+      const r = await fetchJSON(`/api/search?q=${encodeURIComponent(q)}`);
+      if (seq !== searchSeq) return;
+      suggestions = r.results; hl = suggestions.length ? 0 : -1;
+      renderSuggest(false);
+    } catch { if (seq === searchSeq) closeSuggest(); }
+  }, 250);
+});
+$("q").addEventListener("keydown", (e) => {
+  if ($("suggest").hidden || !suggestions.length) { if (e.key === "Escape") closeSuggest(); return; }
+  if (e.key === "ArrowDown") { e.preventDefault(); hl = (hl + 1) % suggestions.length; renderSuggest(false); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); hl = (hl - 1 + suggestions.length) % suggestions.length; renderSuggest(false); }
+  else if (e.key === "Escape") closeSuggest();
+});
+$("q").addEventListener("blur", () => setTimeout(closeSuggest, 150));
+$("search").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const typed = $("q").value;
+  if (!typed.trim()) return;
+  // Pressing Enter picks the highlighted suggestion; otherwise the server resolves what was typed.
+  if (suggestions.length && hl >= 0) return pick(suggestions[hl].symbol);
+  $("q").value = ""; closeSuggest(); add(typed);
+});
 
 /* ---------- loading a stock ---------- */
 const companyCache = {};
@@ -338,12 +400,20 @@ async function select(t) {
   view.replaceChildren(el("div", { class: "skeleton" }), el("div", { class: "skeleton" }), el("div", { class: "skeleton" }));
   try {
     const data = companyCache[t] || await fetchJSON(`/api/company/${encodeURIComponent(t)}`);
-    companyCache[t] = data;
-    if (current === t) renderStock(data);
+    companyCache[t] = companyCache[data.ticker] = data;
+    if (current !== t) return;
+    if (data.ticker !== t) {
+      watch = watch.includes(data.ticker) ? watch.filter((x) => x !== t) : watch.map((x) => (x === t ? data.ticker : x));
+      store.set("watchlist", watch);
+      current = data.ticker;
+      store.set("current", current);
+      renderChips();
+    }
+    renderStock(data);
   } catch (err) {
     if (current !== t) return;
     view.replaceChildren(el("div", { class: "card" }, el("div", { class: "error" }, err.message),
-      el("p", { class: "muted" }, "Tip: Indian stocks need a suffix — .NS for NSE (e.g. TCS.NS) or .BO for BSE.")));
+      el("p", { class: "muted" }, "Tip: start typing the company name in the search box and pick it from the list.")));
   }
 }
 async function fetchJSON(url, opts) {
